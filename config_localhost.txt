@@ -1,0 +1,9 @@
+my_host = "the_node"
+
+upstream = "127.0.0.1"
+--upstream = "192.168.1.157"
+--upstream = "192.168.1.4"
+
+pdp_window_size = 10
+trap_generation_interval = 1
+--max_events_in_window=2

@@ -1,0 +1,7 @@
+my_name_pdp="/lupa/pdp"
+my_name_pep="/lupa/pep"
+my_name_rmoon="/lupa/rmoon"
+my_host="127.0.0.1"
+
+pdp_window_size = 10
+trap_generation_interval = 1

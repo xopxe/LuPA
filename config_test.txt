@@ -1,0 +1,10 @@
+
+my_name_pdp="127.0.0.1/lupa/pdp"
+my_name_pep="127.0.0.1/lupa/pep"
+my_name_rmoon="127.0.0.1/lupa/rmoon"
+
+upstream = {"127.0.0.1", 8182}
+
+pdp_window_size = 5
+trap_generation_interval = 1
+--max_events_in_window=2

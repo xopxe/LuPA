@@ -1,0 +1,4 @@
+my_name_pep = "127.0.0.1/lupa/pep"
+upstream    = {"127.0.0.1", 8182}
+
+

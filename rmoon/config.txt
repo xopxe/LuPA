@@ -1,0 +1,4 @@
+my_name_rmoon = "127.0.0.1/lupa/rmoon"
+upstream      = {"127.0.0.1", 8182}
+
+

@@ -1,0 +1,24 @@
+
+--aux
+local util=require("util")
+
+local function get_if_ip(iface)
+	local ifconfig = util.run_shell("ifconfig	" .. tostring(iface))
+	local ip=string.match(ifconfig, "inet addr:(%S+)") 
+	return ip
+end
+--/aux
+
+local eth0_ip='' --get_if_ip("eth0")
+my_name_pdp=eth0_ip .. "/lupa/pdp"
+my_name_pep=eth0_ip .. "/lupa/pep"
+my_name_rmoon=eth0_ip .. "/lupa/rmoon"
+
+my_host='sensor'
+
+upstream = "127.0.0.1"
+--rnr_port=9182
+
+pdp_window_size = 10
+trap_generation_interval = 1
+--max_events_in_window=2
