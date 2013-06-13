@@ -65,18 +65,6 @@ local rmoon=require("rmoon")
 local util=require("util")
 local unescape=util.unescape
 
-function socket.connect(address, port, laddress, lport)
-    local sock, err = socket.tcp()
-    if not sock then return nil, err end
-    if laddress then
-        local res, err = sock:bind(laddress, lport, -1)
-        if not res then return nil, err end
-    end
-    local res, err = sock:connect(address, port)
-    if not res then return nil, err end
-    return sock
-end
-
 local sha1, sign_message
 if configuration.use_sha1 then
 	sha1=require('sha1')
