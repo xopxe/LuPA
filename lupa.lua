@@ -36,7 +36,7 @@
     
 --]]
 
-package.path=package.path .. ";lib/?.lua;rmoon/?.lua;pep/?.lua;pdp/?.lua"
+package.path= "lupa/?.lua;" .. package.path .. ";lupa/lib/?.lua;lupa/rmoon/?.lua;lupa/pep/?.lua;lupa/pdp/?.lua"
 
 require("socket")
 
@@ -64,6 +64,18 @@ local rmoon=require("rmoon")
 
 local util=require("util")
 local unescape=util.unescape
+
+function socket.connect(address, port, laddress, lport)
+    local sock, err = socket.tcp()
+    if not sock then return nil, err end
+    if laddress then
+        local res, err = sock:bind(laddress, lport, -1)
+        if not res then return nil, err end
+    end
+    local res, err = sock:connect(address, port)
+    if not res then return nil, err end
+    return sock
+end
 
 local sha1, sign_message
 if configuration.use_sha1 then
@@ -247,6 +259,7 @@ while true do
 		local line, data_pep, data_pdp, data_rmoon, ts
 		while err_pep ~= "closed" or err_pdp ~= "closed" or err_rmoon ~= "closed" do
 			local data_skts, _, err = socket.select(skts, nil, configuration.time_step)
+			io.flush()
 			ts = socket.gettime()
 			--verify pending jobs
 			--process watchers
