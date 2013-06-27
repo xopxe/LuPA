@@ -153,7 +153,7 @@ function generate_action(my_service, params)
 end
 
 
-local subscription_template ="NOTIFICATION\n"
+local subscription_template ="SUBSCRIBE\n"
 .."subscription_id=@SID@\n"
 .."host="..configuration.my_host.."\n"
 .."service=@MYSERV@\n"
