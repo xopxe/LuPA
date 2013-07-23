@@ -36,7 +36,9 @@
     
 --]]
 
-package.path=package.path .. ";lib/?.lua;rmoon/?.lua;pep/?.lua;pdp/?.lua"
+package.path= "lupa/?.lua;" .. package.path .. ";lupa/lib/?.lua;lupa/rmoon/?.lua;lupa/pep/?.lua;lupa/pdp/?.lua"
+
+io.stdout:setvbuf("line")
 
 require("socket")
 
@@ -140,7 +142,8 @@ local function process_pep(params)
 			local response = pep.commands[command](params)
 			if response then
 				local msg=messages.generate_response(configuration.my_name_pep,params, response)
-				skt_pep:send(msg)
+				_,err_pep = skt_pep:send(msg)
+   			--if err_pep then print ("Error sending response", err_pep) end
 			end
 		else
 			print ("ERR: unknown command",command)
@@ -161,11 +164,14 @@ local function process_pdp(params)
 			--ademas, devolvemos la salida de inicializar...
 			if response then
 				local msg=messages.generate_response(configuration.my_name_pdp,params, response)
-				skt_pdp:send(msg)
+				_,err_pdp = skt_pdp:send(msg)
+ 				--if err_pdp then print ("Error sending response", err_pdp) end
 			end
 			if outgoing then
 				for _, out in ipairs(outgoing) do
-					skt_pdp:send( generate_pdp_output(out) )
+					_,err_pdp = skt_pdp:send( generate_pdp_output(out) )
+ 					--if err_pdp then print ("Error sending outgoing", err_pdp) end
+          --print("An action was pumped in the socket")
 				end
 			end						
 		else
@@ -181,7 +187,8 @@ local function process_pdp(params)
     local outgoing=pdp.incomming_event(params)
     --print("Elementos outgoing : ", table.maxn(outgoing))
     for _, out in ipairs(outgoing) do
-        skt_pdp:send( generate_pdp_output(out) )
+        _,err_pdp = skt_pdp:send( generate_pdp_output(out) )
+        --if err_pdp then print ("Error sending outgoing", err_pdp)end
         --print("An action was pumped in the socket")
     end		
 	--end
@@ -198,7 +205,8 @@ local function process_rmoon(params)
 			response = rmoon.commands[command](params)
 			if response then
 				local msg=messages.generate_response(configuration.my_name_rmoon,params, response)
-				skt_rmoon:send(msg)
+				_,err_rmoon = skt_rmoon:send(msg)
+ 				--if err_rmoon then print ("Error sending response", err_rmoon)end
 			end
 		else
 			print ("ERR: unknown command",command)
@@ -232,11 +240,11 @@ while true do
 				.. "\nFILTER\ntarget_host=".. configuration.my_host .."\ntarget_service=".. configuration.my_name_rmoon .."\nEND\n"
 		
 		_,err_pep = skt_pep:send(subsn_pep or "")
-		if err_pep then print ("Error sending subsn_pep", err)end
+		if err_pep then print ("Error sending subsn_pep", err_pep)end
 		_,err_pdp = skt_pdp:send(subsn_pdp or "")
-		if err_pdp then print ("Error sending subsn_pdp", err)end
+		if err_pdp then print ("Error sending subsn_pdp", err_pdp)end
 		_,err_rmoon = skt_rmoon:send(subsn_rmoon or "")
-		if err_rmoon then print ("Error sending subsn_rmoon", err)end
+		if err_rmoon then print ("Error sending subsn_rmoon", err_rmoon)end
 		print("Subscribed.")
 		
 		--client:settimeout(configuration.time_step)
@@ -247,6 +255,7 @@ while true do
 		local line, data_pep, data_pdp, data_rmoon, ts
 		while err_pep ~= "closed" or err_pdp ~= "closed" or err_rmoon ~= "closed" do
 			local data_skts, _, err = socket.select(skts, nil, configuration.time_step)
+			io.flush()
 			ts = socket.gettime()
 			--verify pending jobs
 			--process watchers
@@ -254,7 +263,8 @@ while true do
 --print('--', ts)
 				local traps=rmoon.generate_traps()
 				for _, trap in ipairs(traps) do
-					skt_rmoon:send( messages.generate_trap(configuration.my_name_rmoon,trap) )
+					_,err_rmoon = skt_rmoon:send( messages.generate_trap(configuration.my_name_rmoon,trap) )
+					--if err_rmoon then print ("Error sending trap", err_rmoon)end
 				end
 				last_rmoon_timestamp=ts
 			end
@@ -262,13 +272,14 @@ while true do
 			if ts - last_pdp_timestamp >= pdp_evaluation_interval then
 				local outgoing=pdp.tick()
 				for _, notif in ipairs(outgoing) do
-					skt_pdp:send( messages.generate_action(configuration.my_name_pdp,notif) )
+					_,err_pdp = skt_pdp:send( messages.generate_action(configuration.my_name_pdp,notif) )
+ 					--if err_pdp then print ("Error sending notif", err_pdp)end
 				end
 				last_pdp_timestamp=ts
 			end
 			if err~="timeout" then
 				if data_skts[skt_pep] then
-					line, err = skt_pep:receive()
+					line, err_pep = skt_pep:receive()
 					--accumulate message lines
 					if data_pep then
 						if line=="END" then
@@ -285,7 +296,7 @@ while true do
 					end
 				end
 				if data_skts[skt_pdp] then
-					line, err = skt_pdp:receive()
+					line, err_pdp = skt_pdp:receive()
 					--accumulate message lines
 					if data_pdp then
 						if line=="END" then
@@ -302,7 +313,7 @@ while true do
 					end
 				end
 				if data_skts[skt_rmoon] then
-					line, err = skt_rmoon:receive()
+					line, err_rmoon = skt_rmoon:receive()
 					--accumulate message lines
 					if data_rmoon then
 						if line=="END" then
