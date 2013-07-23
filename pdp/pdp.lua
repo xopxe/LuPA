@@ -188,3 +188,30 @@ commands["set_fsm"] = function (params)
 	return {status = "ok", ret=tostring(ret)}, outgoing or {}
 end
 
+commands["set_fsm_file"] = function (params)
+	--local fsm = params.fsm
+	local fsm_name = params.fsm_name
+	if not fsm_name then
+	    print ("Error opening huge FSM")
+	    return {status = "error, huge fsm has nil location"}
+	end
+	local f = assert(io.open(fsm_name, "r"))
+	local fsm = f:read("*all")
+	f:close()
+	
+	local runproc, err = loadstring (fsm, fsm_name)
+	--local runproc, err = loadfile (fsm)
+	if not runproc then
+		print ("Error loading",err)
+		return {status = tostring(err)}		
+	end
+	
+	setfenv (runproc, fsm_env)       
+	local ret = assert(runproc)()
+	
+	local outgoing=evaluate_in_box(fsm_env.initialize)
+	
+	return {status = "ok", ret=tostring(ret)}, outgoing or {}
+end
+
+
