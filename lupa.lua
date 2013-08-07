@@ -60,9 +60,13 @@ print("CONF upstream", to_host)
 
 local messages=require("messages")
 
-local pep=require("pep")
-local pdp=require("pdp")
-local rmoon=require("rmoon")
+print ("CONF enable_pep", configuration.enable_pep)
+print ("CONF enable_pdp", configuration.enable_pdp)
+print ("CONF enable_rmoon", configuration.enable_rmoon)
+local pep, pdp, rmoon
+if configuration.enable_pep then pep=require("pep") end
+if configuration.enable_pdp then pdp=require("pdp") end
+if configuration.enable_rmoon then rmoon=require("rmoon") end
 
 local util=require("util")
 local unescape=util.unescape
@@ -217,15 +221,18 @@ end
 while true do
 	local err,err_pep,err_pdp,err_rmoon
 	print("Connecting...")
-	skt_pep = socket.connect(to_host, to_port)
-	skt_pdp = socket.connect(to_host, to_port)
-	skt_rmoon = socket.connect(to_host, to_port)
+	if pep then skt_pep = socket.connect(to_host, to_port) end
+	if pdp then skt_pdp = socket.connect(to_host, to_port) end
+	if rmoon then skt_rmoon = socket.connect(to_host, to_port) end
 
 	local last_rmoon_timestamp = 0
 	local last_pdp_timestamp = 0
-	if skt_pep and skt_pdp and skt_rmoon then	
+	if skt_pep or skt_pdp or skt_rmoon then	
 		print("Connected.")
-		local skts={[1]=skt_pep, [2]=skt_pdp, [3]=skt_rmoon}
+		local skts={}
+    skts[#skts+1] = skt_pep
+    skts[#skts+1] = skt_pdp
+    skts[#skts+1] = skt_rmoon
 		for _, skt in ipairs(skts) do skt:settimeout(nil) end
 
 		local subsnid = "_sub_"..tostring(math.random(2^30)) 
@@ -239,12 +246,18 @@ while true do
 				.."\nservice=".. configuration.my_name_rmoon .."\nsubscription_id=rmoon"..subsnid
 				.. "\nFILTER\ntarget_host=".. configuration.my_host .."\ntarget_service=".. configuration.my_name_rmoon .."\nEND\n"
 		
-		_,err_pep = skt_pep:send(subsn_pep or "")
-		if err_pep then print ("Error sending subsn_pep", err_pep)end
-		_,err_pdp = skt_pdp:send(subsn_pdp or "")
-		if err_pdp then print ("Error sending subsn_pdp", err_pdp)end
-		_,err_rmoon = skt_rmoon:send(subsn_rmoon or "")
-		if err_rmoon then print ("Error sending subsn_rmoon", err_rmoon)end
+    if skt_pep then 
+      _,err_pep = skt_pep:send(subsn_pep or "") 
+      if err_pep then print ("Error sending subsn_pep", err_pep)end
+    end
+    if skt_pdp then 
+      _,err_pdp = skt_pdp:send(subsn_pdp or "")
+      if err_pdp then print ("Error sending subsn_pdp", err_pdp)end
+    end
+    if skt_rmoon then 
+      _,err_rmoon = skt_rmoon:send(subsn_rmoon or "")
+      if err_rmoon then print ("Error sending subsn_rmoon", err_rmoon)end
+    end
 		print("Subscribed.")
 		
 		--client:settimeout(configuration.time_step)
@@ -259,7 +272,7 @@ while true do
 			ts = socket.gettime()
 			--verify pending jobs
 			--process watchers
-			if ts - last_rmoon_timestamp >= trap_generation_interval then
+			if rmoon and ts - last_rmoon_timestamp >= trap_generation_interval then
 --print('--', ts)
 				local traps=rmoon.generate_traps()
 				for _, trap in ipairs(traps) do
@@ -269,7 +282,7 @@ while true do
 				last_rmoon_timestamp=ts
 			end
 			--process policy in pdp
-			if ts - last_pdp_timestamp >= pdp_evaluation_interval then
+			if pdp and ts - last_pdp_timestamp >= pdp_evaluation_interval then
 				local outgoing=pdp.tick()
 				for _, notif in ipairs(outgoing) do
 					_,err_pdp = skt_pdp:send( messages.generate_action(configuration.my_name_pdp,notif) )
@@ -278,7 +291,7 @@ while true do
 				last_pdp_timestamp=ts
 			end
 			if err~="timeout" then
-				if data_skts[skt_pep] then
+				if skt_pep and data_skts[skt_pep] then
 					line, err_pep = skt_pep:receive()
 					--accumulate message lines
 					if data_pep then
@@ -295,7 +308,7 @@ while true do
 						end
 					end
 				end
-				if data_skts[skt_pdp] then
+				if skt_pdp and data_skts[skt_pdp] then
 					line, err_pdp = skt_pdp:receive()
 					--accumulate message lines
 					if data_pdp then
@@ -312,7 +325,7 @@ while true do
 						end
 					end
 				end
-				if data_skts[skt_rmoon] then
+				if skt_rmoon and data_skts[skt_rmoon] then
 					line, err_rmoon = skt_rmoon:receive()
 					--accumulate message lines
 					if data_rmoon then
