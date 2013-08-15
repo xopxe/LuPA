@@ -40,10 +40,6 @@ rnr_port=8182
 
 upstream = "127.0.0.1"
 
-enable_pdp = true
-enable_rmoon = true
-enable_pep = true
-
 --carga un archivo de configuracion
 function load(file)
 	local f, err = loadfile(file)

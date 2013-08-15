@@ -54,6 +54,10 @@ use_usb4all	=false 	--cargar el modulo de usb4all
 
 upstream = "127.0.0.1"
 
+enable_pdp = true
+enable_rmoon = true
+enable_pep = true
+
 use_sha1 	= false --true	--load sha1 module
 use_sha1_cache	= true  --faster sha1, uses more memory	
 sha1_key	= "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" --key used to sign messages
