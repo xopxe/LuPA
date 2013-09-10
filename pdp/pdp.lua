@@ -46,126 +46,95 @@ local fsm_env = fsm_box.env
 
 --window copy for fsm, as an array. prepended happening_events.
 --{ {event=e, ts=arrived_ts}, ...}
-fsm_env.window = {}
+local window = {}
+fsm_env.window = window
 
 --state maintaining events, exported into fsm and administered in there.
 --{event,...}
-local happening_events = {}
-fsm_env.happening_events = happening_events
-
---Generate a copy of the window with the happening_events inserted
-local function create_processed_window()
-	local window={}
-
-	--insert events from the happening list
-	local oldest_ts
-	if pending_events[pending_events.first] then
-		oldest_ts=pending_events[pending_events.first].ts
-	else
-		oldest_ts=gettime()
-	end
-	for _, e in ipairs(happening_events) do
-		table_insert(window, {event=e, ts=oldest_ts} )
-	end
-
-	--sort window (happenings) by event watcher_id if available, otherwise by timestamp
-	if configuration.pdp_sort_window then
-		table.sort(window, function (a,b)
-			local wa,wb=a.event.watcher_id, b.event.watcher_id
-			if wa and wb then
-				return wa < wb
-			else
-		      		return (a.event.timestamp < b.event.timestamp)
-			end
-	    	end)
-		window_moved = true
-	end
-
-	--insert events from the original window	
-	for i=pending_events.first, pending_events.last do
-		table_insert(window, pending_events[i] )
-	end
-
-	return window
-end
+fsm_env.happening_events = {}
 
 local function evaluate_in_box(call)
 --print ("#evaluate_in_box", call)	
 	--the incomming fsm should provide the function
 	if not call then 
 		print ("Error: function not in box", call)
-		return {}
+		return nil, 'function not in box '..tostring(call)
 	end
 
 	--local pending_events_processed = create_processed_window()
 	--fsm_env.window = pending_events_processed  --publish the window in the fsm
-	
-	local ok, ret = pcall (call)
-	
-	if ok and ret then
-		return ret
-	end
-	if not ok then print("Error evaluating fsm",ret)end
-	return {}
+  local function process_output(ok, ...)
+    if ok then
+      return ...
+    else
+      print("Error evaluating fsm",...) end
+    return nil, ...
+  end
+	return process_output(pcall (call))
+end
+
+--borra eventos caducos por la izq. omitiendo happenings
+local function maintain_window(w)
+ 	local ts_cutout=gettime()-pdp_window_size
+  local moved = false
+  for i=1, #w do
+    local e = w[i]
+    if not fsm_env.happening_events[e] and (tonumber(e.ts) > ts_cutout or #w>max_events_in_window) then
+      moved = true
+      table.remove(w, i)
+    end
+  end
+  return moved
 end
 
 
+local function step_window()
+  local moved = maintain_window(window)
+   
+	if moved then
+    evaluate_in_box(fsm_env.reset)
+  end
+    
+  local ret = {}
+  local stalled = false
+  repeat
+		local notifs, waiting, final = evaluate_in_box(fsm_env.step)
+    if final then
+      --step deberia sacar todo lo reconocido
+      for _, v in ipairs(notifs) do ret[#ret+1] = v end
+      evaluate_in_box(fsm_env.reset)
+    elseif not waiting then
+      --sacar el primero no happening
+      stalled = true
+      for i=1, #window do
+        local e = window[i]
+        if not fsm_env.happening_events[e] then
+          table.remove(window, i)
+          stalled = false
+          break
+        end
+      end
+      evaluate_in_box(fsm_env.reset)
+    end  
+  until waiting or stalled
+    
+  return ret
+end
+
 function incomming_event(data)
-	if not fsm_env.proccess_window_add then return {} end
+	if not fsm_env.step then return {} end
 print ("#incomming_event",  data.watcher_id)
-	local ts_now=gettime()
-	List.pushright(pending_events, {event=data, ts=ts_now} )
-	--verify window size
-	if pending_events.last - pending_events.first < max_events_in_window then
-		if pdp_sort_window then
-			--regenerate window copy and publish it into fsm
-			fsm_env.window = create_processed_window()  
-		else
-			--insert also into window copy for fsm
-			table_insert(fsm_env.window, {event=data, ts=ts_now})
-		end
-
-	else
-		--window too big, prune
-		List.popleft(pending_events)
-		window_moved = true
-		
-		--regenerate window copy and publish it into fsm
-		fsm_env.window = create_processed_window()  
-	end
-
-	if window_moved then
-		window_moved = false
-		return evaluate_in_box(fsm_env.proccess_window_move)
-	else
-		return evaluate_in_box(fsm_env.proccess_window_add)
-	end
-
+  
+	window[#window+1] = {event=data, ts=gettime()}
+  
+  return step_window()
 end
 
 function tick()
 	--if window empty, or no fsm, skip
-	if pending_events.first>pending_events.last or not fsm_env.proccess_window_move then return {} end
+	if not fsm_env.step or #window==0 then return {} end
 	
-	local ts_cutout=gettime()-pdp_window_size
-	local ret = {}
-	
-	while pending_events[pending_events.first] 
-			and (tonumber(pending_events[pending_events.first].ts) < ts_cutout) do
-		--purge obsolete events from window
-		List.popleft(pending_events)
-
-		--regenerate window copy and publish it into fsm
-		fsm_env.window = create_processed_window()  
-
-		local ret_call=evaluate_in_box(fsm_env.proccess_window_move)
-		--enqueue generated actions
-		for _, r in ipairs(ret_call) do
-			table_insert(ret, r)
-		end
-	end
-	
-	return ret
+  return step_window()
 end
 
 commands = {}
@@ -183,9 +152,9 @@ commands["set_fsm"] = function (params)
 	setfenv (runproc, fsm_env)       
 	local ret = assert(runproc)()
 	
-	local outgoing=evaluate_in_box(fsm_env.initialize)
+	local outgoing_s, outgoing_n = evaluate_in_box(fsm_env.initialize)
 	
-	return {status = "ok", ret=tostring(ret)}, outgoing or {}
+	return {status = "ok", ret=tostring(ret)}, outgoing_s, outgoing_n
 end
 
 commands["set_fsm_file"] = function (params)
@@ -199,8 +168,8 @@ commands["set_fsm_file"] = function (params)
 	local fsm = f:read("*all")
 	f:close()
 	
-	local runproc, err = loadstring (fsm, fsm_name)
-	--local runproc, err = loadfile (fsm)
+	--local runproc, err = loadstring (fsm, fsm_name)
+	local runproc, err = loadfile (fsm)
 	if not runproc then
 		print ("Error loading",err)
 		return {status = tostring(err)}		
@@ -209,9 +178,9 @@ commands["set_fsm_file"] = function (params)
 	setfenv (runproc, fsm_env)       
 	local ret = assert(runproc)()
 	
-	local outgoing=evaluate_in_box(fsm_env.initialize)
-	
-	return {status = "ok", ret=tostring(ret)}, outgoing or {}
+	local outgoing_s, outgoing_n = evaluate_in_box(fsm_env.initialize)
+
+	return {status = "ok", ret=tostring(ret)}, outgoing_s, outgoing_n
 end
 
 

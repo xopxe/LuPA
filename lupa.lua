@@ -160,25 +160,34 @@ local function process_pdp(params)
 		
 	--procesamos segun accion
 	if message_type == "action" and command then
-		local response
+		local response, outgoing_s, outgoing_n
 		if pdp.commands[command] then
 			print ("IN pdp action",command)
 			--local messages
-			response, outgoing = pdp.commands[command](params)
+			response, outgoing_s, outgoing_n = pdp.commands[command](params)
 			--ademas, devolvemos la salida de inicializar...
 			if response then
 				local msg=messages.generate_response(configuration.my_name_pdp,params, response)
-				_,err_pdp = skt_pdp:send(msg)
+				local _,err_pdp = skt_pdp:send(msg)
  				--if err_pdp then print ("Error sending response", err_pdp) end
 			end
-			if outgoing then
-				for _, out in ipairs(outgoing) do
-					_,err_pdp = skt_pdp:send( generate_pdp_output(out) )
+			if outgoing_s then
+				for _, out in ipairs(outgoing_s) do
+          local m = messages.generate_subscription(configuration.my_name_pdp,out)
+					local _,err_pdp = skt_pdp:send( m )
  					--if err_pdp then print ("Error sending outgoing", err_pdp) end
           --print("An action was pumped in the socket")
 				end
 			end						
-		else
+			if outgoing_n then
+				for _, out in ipairs(outgoing_n) do
+          local m = messages.generate_action(configuration.my_name_pdp,out)
+					local _,err_pdp = skt_pdp:send( m )
+ 					--if err_pdp then print ("Error sending outgoing", err_pdp) end
+          --print("An action was pumped in the socket")
+				end
+			end					
+    else
 			print ("ERR: unknown command",command)
 		end
 	
@@ -188,10 +197,10 @@ local function process_pdp(params)
 	--registramos el evento para la maquina de estados
 	--if message_type == "trap" then
 	--if message_type ~= "action" then
-    local outgoing=pdp.incomming_event(params)
+  local outgoing=pdp.incomming_event(params)
     --print("Elementos outgoing : ", table.maxn(outgoing))
     for _, out in ipairs(outgoing) do
-        _,err_pdp = skt_pdp:send( generate_pdp_output(out) )
+        local _,err_pdp = skt_pdp:send( generate_pdp_output(out) )
         --if err_pdp then print ("Error sending outgoing", err_pdp)end
         --print("An action was pumped in the socket")
     end		
