@@ -96,27 +96,16 @@ local function step_window()
   end
     
   local ret = {}
-  local stalled = false
   repeat
-		local notifs, waiting, final = evaluate_in_box(fsm_env.step)
-    if final then
+		local notifs, accept, final = evaluate_in_box(fsm_env.step)
+    if accept then
       --step deberia sacar todo lo reconocido
       for _, v in ipairs(notifs) do ret[#ret+1] = v end
-      evaluate_in_box(fsm_env.reset)
-    elseif not waiting then
-      --sacar el primero no happening
-      stalled = true
-      for i=1, #window do
-        local e = window[i]
-        if not fsm_env.happening_events[e] then
-          table.remove(window, i)
-          stalled = false
-          break
-        end
+      if final then 
+        evaluate_in_box(fsm_env.reset)
       end
-      evaluate_in_box(fsm_env.reset)
-    end  
-  until waiting or stalled
+    end
+  until not accept --at window end
     
   return ret
 end
